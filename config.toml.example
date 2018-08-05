@@ -1,0 +1,77 @@
+# Whether this instance will run as a server or a client.
+# The running mode can also be specified using command line arguments.
+mode = "server"
+
+# What notifier will be used to notify events.
+# Available notifiers:
+# - multicast
+#   Notifies events using multicast. Requires configuration.
+# - none
+#   Disables notifications.
+notifier_name = "multicast"
+
+# Configuration of the `multicast` notifier
+[notifier.multicast]
+# Where the UDP socket will be bound to, which usually means on which interface you will receive
+# or send multicast packets.
+# In client mode (i.e. receiving notifications), use any IP address (including 0.0.0.0) and use
+# the same port number of `addr`.
+# In server mode (i.e. sending notifications), use any IP address (including 0.0.0.0) and use "0"
+# as the port.
+bind_addr = "0.0.0.0:5454"
+
+# The multicast IP address and port where notifications will be sent to.
+addr = "239.255.54.54:5454"
+
+# Server mode configuration
+[server]
+# IP address and port to bind to.
+bind_to = "127.0.0.1:5454"
+
+# What renewer to use.
+# Available renewers:
+# - dlink
+#   For D-Link home routers (tested with a DVA-5592). Requires configuration.
+# - dummy
+#   A dummy renewer which does nothing and requires no configuration.
+renewer_name = "dlink"
+
+# Configuration of the `dlink` renewer
+[server.renewer.dlink]
+# IP address of the router.
+ip = "10.0.1.1"
+
+# Username and password used to login.
+username = "admin"
+password = "admin"
+
+# The network interface whose address will be renewed. You can obtain this value by navigating
+# to the interface with your browser and putting here everything after "/netif/".
+interface = "pppif?if=1"
+
+# Client mode configuration
+[client]
+# Where to connect to.
+connect_to = "127.0.0.1:5454"
+
+# What action will be performed by the client.
+# Note that actions can also be specified with command line arguments. To learn more, run
+# ./oxixenon client help [action_name]
+[client.action]
+# Available actions:
+# - renew
+#   Asks the server to obtain a new IP address. No parameters.
+# - notifications
+#   Subscribes to notifications using the configured notifier. No parameters.
+# - set_availability
+#   Sets the renew availability on the server. Requires configuration.
+name = "set_availability"
+
+# Configuration of action "set_availability"
+[client.action.set_availability]
+# Specifies whether renewing is available or not. If false, a reason for the unavailability is
+# required.
+available = true
+
+# Reason for unavailability. Only used (and required) if `available` is false.
+reason = "Busy"

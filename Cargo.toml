@@ -1,0 +1,17 @@
+[package]
+name = "oxixenon"
+version = "0.1.0"
+authors = ["Roberto Frenna <robertof.public@gmail.com>"]
+
+[dependencies]
+byteorder = "1"
+toml = "0.4"
+http = { version = "0.1", optional = true }
+hmac = { version = "*", optional = true }
+sha2 = { version = "*", optional = true }
+clap = { version = "*", default-features = false }
+
+[features]
+default = ["client", "server"]
+client = []
+server = ["http", "hmac", "sha2"]
