@@ -50,6 +50,14 @@ impl fmt::Display for Event {
     }
 }
 
+impl Event {
+    pub fn extended_descr(&self) -> &'static str {
+        match *self {
+            Event::IPRenewed => "An IP renewal has been requested"
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum RenewAvailability {
     Available,
