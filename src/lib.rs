@@ -7,6 +7,8 @@ extern crate hmac;
 #[cfg(feature = "server")]
 extern crate sha2;
 extern crate clap;
+#[cfg(all(windows, feature = "client-toasts"))]
+extern crate winrt;
 
 static mut DEBUG_ENABLED: bool = false;
 
@@ -40,3 +42,6 @@ pub mod renewer;
 #[cfg(feature = "server")]
 pub mod http_client;
 pub mod notifier;
+
+#[cfg(feature = "client-toasts")]
+pub mod notification_toasts;

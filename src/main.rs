@@ -20,6 +20,9 @@ use std::io::prelude::*;
 #[cfg(feature = "client")]
 use std::net::TcpStream;
 
+#[cfg(all(feature = "client", feature = "client-toasts"))]
+use oxixenon::notification_toasts::*;
+
 fn main() {
     let args = clap_app!(oxixenon =>
         (@setting DeriveDisplayOrder)
@@ -84,6 +87,7 @@ fn main() {
     }
 }
 
+// Server
 #[cfg(feature = "server")]
 fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
     // Local macro to make returning errors easy.
@@ -148,6 +152,14 @@ fn start_server (_config: &config::ServerConfig, _notifier: Box<Notifier>) -> Re
     process::exit(255)
 }
 
+// Client
+#[cfg(feature = "client-toasts")]
+fn try_send_toast (toasts: &NotificationToasts, message: &str) {
+    if let Err(e) = toasts.send_toast (message) {
+        eprintln!("<client> warning: can't send notification toast: {}", e)
+    }
+}
+
 #[cfg(feature = "client")]
 fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
     eprintln!("<client> running action '{}'", config.action);
@@ -157,9 +169,15 @@ fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> 
             Some (Packet::SetRenewingAvailable (availability.clone())),
         config::ClientAction::SubscribeToNotifications => {
             eprintln!("<client> listening...");
+
+            #[cfg(feature = "client-toasts")]
+            let toasts = NotificationToasts::new();
             notifier.listen (&|event, from| {
-                eprintln!("<client> received event \"{}\" from {}", event,
-                    from.map (|x| x.to_string()).unwrap_or ("unknown".into()));
+                let from_str = from.map (|x| x.to_string()).unwrap_or ("unknown".into());
+                eprintln!("<client> received event \"{}\" from {}", event, from_str);
+                #[cfg(feature = "client-toasts")]
+                try_send_toast (&toasts,
+                    format!("{}\nRequest sent by {}", event.extended_descr(), from_str).as_str());
             })?;
             None
         }

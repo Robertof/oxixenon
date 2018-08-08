@@ -11,7 +11,11 @@ hmac = { version = "*", optional = true }
 sha2 = { version = "*", optional = true }
 clap = { version = "*", default-features = false }
 
+[target.'cfg(windows)'.dependencies]
+winrt = { version = "0.5", features = ["windows-data", "windows-ui"], optional = true }
+
 [features]
 default = ["client", "server"]
 client = []
+client-toasts = ["winrt"]
 server = ["http", "hmac", "sha2"]

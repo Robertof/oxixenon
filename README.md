@@ -31,12 +31,6 @@ notifiers are:
 Check out [extending Xenon](EXTENDING_XENON.md) if you're interested in extending Xenon and adding
 other notifiers.
 
-## Renew availability
-
-Xenon allows to temporarily disable the renewing functionality, and to specify a reason for the
-unavailability. This is useful if, for example, you're performing some critical activity on your
-network and you want to ensure that no downtime occurs.
-
 ## Quick start
 
 To build Xenon, just run `cargo build --release` in the crate root. By default both client and
@@ -53,6 +47,55 @@ The executable will be placed in `target/[architecture]/oxixenon` or `target/rel
 
 Xenon needs a valid configuration to run, please copy `config.toml.example` to `config.toml`
 and edit it to suit your needs.
+
+## Notification toasts
+
+![notification toasts](https://robertof.ovh/sc/oxixenon_toasts.png)
+
+Since version v0.2.0, Xenon supports showing notification toasts when any notification is received
+from the specified `notifier`. At the moment, this feature is only supported on Windows, and
+needs to be configured to work.
+
+### Configuring notification toasts on Windows
+
+1. On modern Windows platforms, notification toasts are only allowed by apps which have a shortcut
+   with a specific property (`AppUserModelId`) set on the shortcut itself. Creating this shortcut
+   by hand is not an easy task, but I created
+   [a tool to make it easier](https://github.com/Robertof/make-shortcut-with-appusermodelid). After
+   having downloaded the tool, run the following where the binary is stored:
+
+   ```sh
+   makelnk.exe RobertoFrenna.Xenon "PATH_TO_XENON_BINARY" Xenon.lnk
+   ```
+
+   Change `PATH_TO_XENON` accordingly. If everything went okay, `makelnk` should produce a positive
+   output and you should now have a shortcut to Xenon in
+   `%APPDATA%\Microsoft\Windows\Start Menu\Programs`.
+
+2. Optional: place `oxixenon.png` where Xenon's binary is to receive toasts with icons. Otherwise,
+   Xenon will gracefully degrade to use text-based toasts.
+
+   _Note_: this is not needed when running Xenon with `cargo`.
+
+3. Compile Xenon with the feature flag `client-toasts`:
+
+   ```sh
+   cargo build --release --no-default-features --features "client client-toasts"
+   ```
+
+4. Run Xenon in `notifications` mode:
+
+   ```sh
+   oxixenon client notifications
+   ```
+
+5. You're done!
+
+## Renew availability
+
+Xenon allows to temporarily disable the renewing functionality, and to specify a reason for the
+unavailability. This is useful if, for example, you're performing some critical activity on your
+network and you want to ensure that no downtime occurs.
 
 ## Dependencies
 
