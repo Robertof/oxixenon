@@ -28,10 +28,10 @@ impl<'a> WriteString for Write + 'a {
 impl<'a> ReadString for Read + 'a {
     fn read_u16_string (&mut self) -> Result<Option<String>> {
         let msg_length = self.read_u16::<NetworkEndian>()?;
-        debug!("<read_u16_string> received msg_length: {}", msg_length);
+        trace!("read_u16_string: received msg_length: {}", msg_length);
         let mut msg_buffer: Vec<u8> = Vec::with_capacity (msg_length.into());
         let _ = self.take (msg_length.into()).read_to_end (&mut msg_buffer);
-        debug!("<read_u16_string> read buffer: {:?}", msg_buffer);
+        trace!("read_u16_string: read buffer: {:?}", msg_buffer);
         Ok(if msg_buffer.len() > 0 { String::from_utf8(msg_buffer).ok() } else { None })
     }
 }
@@ -149,7 +149,7 @@ impl Packet {
 
     pub fn read(reader: &mut Read) -> Result<Self> {
         let packet_no = reader.read_u8()?;
-        debug!("<Packet::read> received packet number: {}", packet_no);
+        trace!("Packet::read: received packet number: {}", packet_no);
 
         let packet = match packet_no {
             PACKET_FRESH_IP_REQUEST => Packet::FreshIPRequest,
@@ -173,7 +173,7 @@ impl Packet {
             _ => return Err (IoError::new (ErrorKind::InvalidData, "unknown packet number"))
         };
 
-        debug!("<Packet::read> finished parsing packet: {:#?}", packet);
+        trace!("Packet::read: finished parsing packet: {:#?}", packet);
         Ok(packet)
     }
 

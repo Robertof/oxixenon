@@ -97,7 +97,8 @@ impl Notifier for MulticastNotifier {
             .ok_or (Error::Generic (
                 "Can't determine an IPv4 address for notifier.multicast.bind_addr"
             ))?;
-        debug!("<notifier::multicast> initialized, addr = {}, bind_addr = {}", addr, bind_addr);
+        trace!(target: "notifier::multicast", "initialized, addr = {}, bind_addr = {}",
+            addr, bind_addr);
         Ok(MulticastNotifier {
             addr,
             bind_addr
@@ -109,7 +110,7 @@ impl Notifier for MulticastNotifier {
         let mut vec: Vec<u8> = Vec::new();
         Packet::Event(event).write (&mut vec)?;
         socket.send_to (&vec, self.addr)?;
-        eprintln!("<notifier::multicast> successfully notified event \"{}\"", event);
+        debug!(target: "notifier::multicast", "successfully notified event \"{}\"", event);
         Ok(())
     }
 
@@ -129,12 +130,12 @@ impl Notifier for MulticastNotifier {
             match Packet::read (&mut slice) {
                 Ok(packet) => {
                     if let Packet::Event(event) = packet {
-                        eprintln!("<notifier::multicast> received event \"{}\"", event);
+                        debug!(target: "notifier::multicast", "received event \"{}\"", event);
                         on_event(event, Some(src_addr))
                     }
                 },
                 Err(error) =>
-                    eprintln!("<notifier::multicast> warning: can't decode incoming packet: {}", error)
+                    warn!(target: "notifier::multicast", "can't decode incoming packet: {}", error)
             }
         }
         

@@ -24,13 +24,13 @@ impl NotificationToasts {
         path.push (r"Microsoft\Windows\Start Menu\Programs");
         path.push (SHORTCUT_NAME);
         if !path.exists() {
-            eprintln!("<notification_toasts> WARNING: toasts are not configured properly");
-            eprintln!(
-                "The shortcut '{}' is required and must have AppUserModelId = '{}'",
+            warn!("notification toasts are not configured properly");
+            warn!(
+                "the shortcut '{}' is required and must have AppUserModelId = '{}'",
                 path.to_string_lossy(),
                 APP_USER_MODEL_ID
             );
-            eprintln!("Please read https://git.io/fNyEC for further information.");
+            warn!("Please read https://git.io/fNyEC for further information.");
         }
         NotificationToasts(Some(RuntimeContext::init()))
     }

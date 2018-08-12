@@ -21,7 +21,7 @@ impl fmt::Display for ClientAction {
             ClientAction::RenewIP => write!(f, "renew ip"),
             ClientAction::SetRenewingAvailability(ref availability) =>
                 write!(f, "set renewal availability to {}", availability),
-            ClientAction::SubscribeToNotifications => write!(f, "subscribe to notifications")
+            ClientAction::SubscribeToNotifications => write!(f, "listen to notifications")
         }
     }
 }
@@ -66,9 +66,22 @@ pub struct NotifierConfig {
 }
 
 #[derive(Debug)]
+pub struct LogBackendConfig {
+    pub name: String,
+    pub config: Option<toml::Value>
+}
+
+#[derive(Debug)]
+pub struct LogConfig {
+    pub level: String,
+    pub backends: Vec<LogBackendConfig>
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub mode: Mode,
-    pub notifier: NotifierConfig
+    pub notifier: NotifierConfig,
+    pub logging: LogConfig
 }
 
 /* <config::Error> */
@@ -172,6 +185,43 @@ impl Config {
         let mut config_str = String::new();
         File::open (config_path)?.read_to_string (&mut config_str)?;
         let config = config_str.parse::<toml::Value>()?;
+
+        // parse logging options
+        let logging = {
+            let logging_table = config.get_as_table_or_invalid_key ("logging")?;
+            // Determine verbosity. It can be specified in three ways, in order of priority:
+            // - configuration file option "verbosity"
+            // - command line argument "level"
+            // - command line argument "verbose" (sets verbosity to "debug")
+            let verbosity = if args.is_present ("verbose") {
+                "debug"
+            } else {
+                arg_or_cfg_option!(
+                    from [Some(args)]    get "level",
+                    from [logging_table] get "logging.verbosity"
+                )?
+            };
+            // Parse backends and their configuration.
+            let backends = logging_table
+                .get_as_or_invalid_key ("logging.backends", toml::Value::as_array)?
+                .iter()
+                .map (|backend_name| {
+                    backend_name
+                        .as_str()
+                        .ok_or (Error::InvalidOptionWithReason (
+                            "logging.backends", "must be all strings"
+                        ))
+                        .map (|backend_name| LogBackendConfig {
+                            name: backend_name.to_string(),
+                            config: logging_table.get (backend_name).map (|v| v.clone())
+                        })
+                })
+                .collect::<Result<Vec<LogBackendConfig>, Error>>()?;
+            LogConfig {
+                level: verbosity.to_string(),
+                backends
+            }
+        };
 
         // parse notifiers
         let notifier = {
@@ -279,6 +329,6 @@ impl Config {
             }
         };
 
-        Ok(Config { mode, notifier })
+        Ok(Config { mode, notifier, logging })
     }
 }

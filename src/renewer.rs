@@ -71,7 +71,7 @@ struct DlinkRenewer {
 
 impl DlinkRenewer {
     fn login (&mut self) -> Result<(), Error> {
-        eprintln!("<renewer::dlink> trying to login using specified credentials");
+        info!(target: "renewer::dlink", "trying to login using specified credentials");
         let login_url = format!("http://{}/ui/login", self.ip);
         let res = http_client::get (login_url.as_str())?;
         if !res.status().is_success() {
@@ -87,7 +87,7 @@ impl DlinkRenewer {
         let csrf_tok = Self::_extract_field_value (csrf_tok, '\'').ok_or (
             Error::Generic ("Can't find CSRF token")
         )?;
-        debug!("<renewer::dlink> extracted nonce = {}, csrf_tok = {}", nonce, csrf_tok);
+        trace!(target: "renewer::dlink", "extracted nonce = {}, csrf_tok = {}", nonce, csrf_tok);
         // Encrypt the password with the retrieved nonce
         let mut mac = HmacSha256::new_varkey (nonce.as_bytes()).expect ("Can't create HmacSha256");
         mac.input (self.password.as_bytes());
@@ -114,7 +114,7 @@ impl DlinkRenewer {
         }
 
         let headers = res.headers();
-        eprintln!("<renewer::dlink> login OK, redirected to {}",
+        info!(target: "renewer::dlink", "login OK, redirected to {}",
             headers[http_client::header::LOCATION].to_str().unwrap());
 
         self.sid_cookie = headers[http_client::header::SET_COOKIE]
@@ -171,14 +171,16 @@ impl Renewer for DlinkRenewer {
     fn renew_ip(&mut self) -> Result<(), Error> {
         // try to request the ip renewal page. If we're redirected to the login page,
         // then we need to login again as the sid has expired.
-        debug!("<renewer::dlink> trying to reuse existing sid to renew");
         let renewal_url = format!("http://{}/ui/dboard/settings/netif/{}&action=reset",
             self.ip, self.interface);
 
         let mut request = http_client::Request::builder();
         {
             let sid_cookie = match self.sid_cookie {
-                Some(ref value) => value,
+                Some(ref value) => {
+                    debug!(target: "renewer::dlink", "trying to reuse existing sid to renew");
+                    value
+                },
                 None => {
                     self.login()?;
                     self.sid_cookie.as_ref().expect ("sid must be present after login")
@@ -190,7 +192,7 @@ impl Renewer for DlinkRenewer {
         let request = http_client::make_request (request.body(None::<String>).unwrap())?;
 
         if !request.status().is_redirection() {
-            debug!("<renewer::dlink> renew failed: got status code {}", request.status());
+            debug!(target: "renewer::dlink", "renew failed: got status code {}", request.status());
             return Err (Error::Generic ("Expected redirect when renewing, got other status code"));
         }
 
@@ -198,19 +200,18 @@ impl Renewer for DlinkRenewer {
         match request.headers()[http_client::header::LOCATION].to_str().unwrap() {
             "/ui/login" => {
                 if self.try_count >= 3 {
-                    eprintln!("<renewer::dlink> ran out of tries, aborting renewal");
                     return Err (Error::Generic (
                         "Too many retries - are you sure the credentials are correct?"));
                 }
-                debug!("<renewer::dlink> sid expired. clearing and re-running");
+                debug!(target: "renewer::dlink", "sid expired. clearing and re-running");
                 self.sid_cookie = None;
                 self.try_count += 1;
                 return self.renew_ip();
             },
             path @ _ => {
                 self.try_count = 0;
-                debug!("<renewer::dlink> redirected to \"{}\", assuming success", path);
-                eprintln!("<renewer::dlink> successfully asked for another IP");
+                trace!(target: "renewer::dlink", "redirected to \"{}\", assuming success", path);
+                info!(target: "renewer::dlink", "successfully asked for another IP");
             }
         }
         Ok(())

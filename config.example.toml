@@ -10,6 +10,42 @@ mode = "server"
 #   Disables notifications.
 notifier_name = "multicast"
 
+[logging]
+# The logging verbosity. Valid values are "off", "error", "warn", "info", "debug", "trace".
+verbosity = "info"
+
+# What logging backends are enabled when running oxixenon.
+# Available backends:
+# - stdout
+#   Outputs normal logging messages to stdout and errors to stderr.
+# - file
+#   Outputs logging messages to a file. Requires configuration.
+# - syslog
+#   Outputs logging messages to syslog. Configuration is optional - defaults to outputting messages
+#   to /dev/log.
+backends = ["stdout", "file"]
+
+# Configuration of the `file` logging backend.
+# `path` specifies the path of the log file.
+file = { path = "/var/log/oxixenon.log" }
+
+# Configuration of the `syslog` logging backend.
+[logging.syslog]
+# Syslog protocol. Valid values are "unix", "tcp" and "udp".
+protocol = "unix"
+
+# Syslog hostname. Optional.
+#hostname = "localhost"
+
+# Path to syslogd's UNIX socket. Optional, defaults to /dev/log or /var/run/syslog.
+#unix_socket_path = "/dev/log"
+
+# UDP local address
+local_addr = "127.0.0.1:1234"
+
+# Syslog server address
+server_addr = "127.0.0.1:4242"
+
 # Configuration of the `multicast` notifier
 [notifier.multicast]
 # Where the UDP socket will be bound to, which usually means on which interface you will receive

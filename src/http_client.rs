@@ -111,7 +111,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
 
     {
         let path = request.uri().path_and_query().map (|p| p.as_str()).unwrap_or ("/");
-        debug!("<http_client> requesting {} {}", request.method(), path);
+        trace!("requesting {} {}", request.method(), path);
         // begin writing our HTTP request
         write!(writer, "{method} {path} {protocol}\r\n",
             method = request.method(),
@@ -155,7 +155,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
     // write headers
     for (key, value) in request.headers().iter() {
         let value = value.to_str().map_err (|e| Error::Other (e.to_string()))?;
-        debug!("<http_client> request header: {} => {}", key.as_str(), value);
+        trace!("request header: {} => {}", key.as_str(), value);
         write!(writer, "{}: {}\r\n", key.as_str(), value)?;
     }
     
@@ -182,7 +182,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
     let mut response_builder = Response::builder();
     let mut expecting_headers = true;
     let mut body = String::new();
-    debug!("<http_client> waiting for a response...");
+    trace!("waiting for a response...");
     for line in reader.lines() {
         let line = line?;
         if line_counter == 0 && !line.starts_with ("HTTP/") {
@@ -195,7 +195,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
                     .split_whitespace()
                     .nth (1)
                     .ok_or (Error::Protocol ("invalid status code"))?;
-                debug!("<http_client> received status code: {}", status_code);
+                trace!("received status code: {}", status_code);
                 response_builder.status (status_code);
             },
             _ if line.is_empty() && expecting_headers => {
@@ -207,7 +207,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
                     iterator.next().ok_or (Error::Protocol ("expecting header name"))?.trim(),
                     iterator.next().ok_or (Error::Protocol ("expecting header value"))?.trim()
                 );
-                debug!("<http_client> response header: {} => {}", header_name, header_value);
+                trace!("response header: {} => {}", header_name, header_value);
                 response_builder.header (
                     header_name,
                     header_value
