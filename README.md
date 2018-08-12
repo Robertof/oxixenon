@@ -45,7 +45,7 @@ cargo build --release --no-default-features --features server
 
 The executable will be placed in `target/[architecture]/oxixenon` or `target/release/oxixenon`.
 
-Xenon needs a valid configuration to run, please copy `config.toml.example` to `config.toml`
+Xenon needs a valid configuration to run, please copy `config.example.toml` to `config.toml`
 and edit it to suit your needs.
 
 ## Notification toasts
