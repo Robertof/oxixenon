@@ -103,13 +103,16 @@ As I expected to run Xenon on my router, I decided to include as little dependen
 and I even went as far as implementing [my own (basic) HTTP client](src/http_client.rs) using the
 objects specified in the crate `http`. The final list of dependencies is the following:
 
-| Name | Client? | Server? | Purpose |
-| ---- | ------- | ------- | ------- |
-| byteorder | yes | yes | To properly send network-endian integers and so on |
-| toml | yes | yes | To parse the configuration |
-| http | no | yes | Basic HTTP objects used by `http_client` |
-| sha2, hmac | no | yes | Required by the `dlink` renewer to hash passwords |
-| clap | yes | yes | Used to parse command line arguments |
+| Name | Client? | Server? | Optional? | Purpose |
+| ---- | ------- | ------- | --------- | ------- |
+| byteorder | yes | yes | no | To properly send network-endian integers and so on |
+| toml | yes | yes | no | To parse the configuration |
+| http | no | yes | no | Basic HTTP objects used by `http_client` |
+| sha2, hmac | no | yes | no | Required by the `dlink` renewer to hash passwords |
+| clap | yes | yes | no | Used to parse command line arguments |
+| winrt | yes | no | yes | To display notification toasts on Windows, enabled with feature `client-toasts` |
+| fern, log | yes | yes | no | Logging support |
+| syslog | yes | yes | yes | Syslog support, enabled with feature `syslog-backend` |
 
 ## Protocol
 

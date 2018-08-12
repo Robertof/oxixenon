@@ -21,7 +21,8 @@ verbosity = "info"
 # - file
 #   Outputs logging messages to a file. Requires configuration.
 # - syslog
-#   Outputs logging messages to syslog. Configuration is optional - defaults to outputting messages
+#   Outputs logging messages to syslog. To use this backend, oxixenon needs to be compiled with
+#   the feature "syslog-backend". Configuration is optional - defaults to outputting messages
 #   to /dev/log.
 backends = ["stdout", "file"]
 
