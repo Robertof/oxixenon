@@ -11,7 +11,10 @@ extern crate log;
 extern crate chrono;
 #[cfg(feature = "syslog-backend")]
 extern crate syslog;
+#[macro_use]
+extern crate error_chain;
 
+pub mod errors;
 pub mod config;
 pub mod logging;
 pub mod protocol;

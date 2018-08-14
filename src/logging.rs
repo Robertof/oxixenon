@@ -4,14 +4,29 @@ extern crate log;
 #[cfg(feature = "syslog-backend")]
 extern crate syslog;
 
-use std::{io, error, fmt};
+use errors::*;
+use std::{io, fmt};
 use log::LevelFilter;
-use config::{ValueExt, LogConfig, Error as ConfigError};
+use config::{ValueExt, LogConfig};
+
+#[macro_export]
+macro_rules! log_error_with_chain {
+    (target: $target:expr, $level:expr, $error:ident, $($arg:tt)+) => {
+        log!(target: $target, $level, $($arg)+);
+        for err in $error.iter().skip(1) {
+            log!(target: $target, $level, "- caused by: {}", err);
+        }
+    };
+    ($level:expr, $error:ident, $($arg:tt)+) =>
+        (log_error_with_chain!(target: module_path!(), $level, $error, $($arg)+));
+    ($error:ident, $($arg:tt)+) =>
+        (log_error_with_chain!(log::Level::Error, $error, $($arg)+));
+}
 
 /// Initializes the global logger with the user-specified configuration.
-pub fn init (config: &LogConfig) -> Result<(), Box<error::Error>> {
-    let log_level: LevelFilter = config.level.parse().map_err (
-        |_| ConfigError::InvalidOptionWithReason("logging.verbosity", "invalid log level"))?;
+pub fn init (config: &LogConfig) -> Result<()> {
+    let log_level: LevelFilter = config.level.parse()
+        .chain_err (|| format!("invalid option 'logging.verbosity': {}", config.level))?;
     let mut fern = fern::Dispatch::new().level (log_level);
     // Used to display data on "stdout". `file` uses a slightly different formatter which also
     // displays the date.
@@ -45,6 +60,10 @@ pub fn init (config: &LogConfig) -> Result<(), Box<error::Error>> {
                     )
             },
             "file" => {
+                let log_path = backend.config.as_ref()
+                    .chain_err (|| "the logging backend 'file' requires to be configured")?
+                    .get_as_str_or_invalid_key ("logging.file.path")
+                    .chain_err (|| "the logging backend 'file' requires a log path")?;
                 fern.chain (
                     fern::Dispatch::new()
                         .format (|out, message, record| {
@@ -57,14 +76,11 @@ pub fn init (config: &LogConfig) -> Result<(), Box<error::Error>> {
                                 message
                             ))
                         })
-                        .chain (fern::log_file (
-                            // Log to the specified path.
-                            backend
-                                .config
-                                .as_ref()
-                                .ok_or (ConfigError::InvalidOption("logging.file"))?
-                                .get_as_str_or_invalid_key ("logging.file.path")?
-                            )?
+                        .chain (
+                            fern::log_file (
+                                // Log to the specified path.
+                                log_path
+                            ).chain_err (|| format!("can't open log file '{}'", log_path))?
                         )
                 )
             },
@@ -87,39 +103,44 @@ pub fn init (config: &LogConfig) -> Result<(), Box<error::Error>> {
                             if let Some(socket_path) =
                                 config.get_as_str ("logging.syslog.unix_socket_path")
                             {
-                                syslog::unix_custom (formatter, socket_path)?
+                                syslog::unix_custom (formatter, socket_path)
                             } else {
-                                syslog::unix (formatter)?
+                                syslog::unix (formatter)
                             }
                         },
                         Some("tcp") => {
                             syslog::tcp (
                                 formatter,
-                                config.get_as_str_or_invalid_key ("logging.syslog.server_addr")?
-                            )?
+                                config.get_as_str_or_invalid_key ("logging.syslog.server_addr")
+                                    .chain_err (|| "syslog TCP protocol requires a server addr")?
+                            )
                         },
                         Some("udp") => {
                             syslog::udp (
                                 formatter,
-                                config.get_as_str_or_invalid_key ("logging.syslog.local_addr")?,
-                                config.get_as_str_or_invalid_key ("logging.syslog.server_addr")?
-                            )?
+                                config.get_as_str_or_invalid_key ("logging.syslog.local_addr")
+                                    .chain_err (|| "syslog UDP protocol requires a local addr")?,
+                                config.get_as_str_or_invalid_key ("logging.syslog.server_addr")
+                                    .chain_err (|| "syslog UDP protocol requires a server addr")?
+                            )
                         },
-                        Some(_) => Err(ConfigError::InvalidOptionWithReason(
-                            "logging.syslog.protocol",
-                            "must be one of 'unix', 'tcp', 'udp'"
-                        ))?,
-                        None => syslog::unix (formatter)?
+                        Some(val) => bail!(
+                            "invalid value '{}' for option 'logging.syslog.protocol', \
+                            must be one of 'unix', 'tcp', 'udp'",
+                            val
+                        ),
+                        None => syslog::unix (formatter)
                     }
                 } else {
-                    syslog::unix (formatter)?
-                })
+                    syslog::unix (formatter)
+                }.chain_err (|| "syslog initialization error")?)
             },
-            _ => Err(ConfigError::InvalidOptionWithReason(
-                "logging.backends", "unknown backend - if it exists, ensure it is enabled"
-            ))?
+            _ => bail!(
+                "unknown logging backend '{}', if it exists, make sure it is enabled",
+                backend.name
+            )
         }
     }
-    fern.apply()?;
+    fern.apply().chain_err (|| "can't initialize the main logger")?;
     Ok(())
 }

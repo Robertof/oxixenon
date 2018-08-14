@@ -7,7 +7,7 @@
 
 extern crate http;
 
-use std::{fmt, io, error, time};
+use std::{io, time};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -19,50 +19,9 @@ pub use http::Request;
 
 const FIVE_SECONDS: time::Duration = time::Duration::from_secs(5);
 
-/// Errors that can occur when making an HTTP request.
-#[derive(Debug)]
-pub enum Error {
-    /// An error which comes from the `http` crate.
-    Http(http::Error),
-    /// An HTTP protocol error.
-    Protocol(&'static str),
-    /// A generic I/O error.
-    Io(io::Error),
-    /// A generic error with an associated message.
-    Other(String)
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Http(ref s) => write!(f, "HTTP error: {}", s),
-            Error::Protocol(ref s) => write!(f, "HTTP protocol error: {}", s),
-            Error::Io(ref s) => write!(f, "I/O error: {}", s),
-            Error::Other(ref s) => write!(f, "Error: {}", s)
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Http(ref e) => Some(e),
-            Error::Protocol(_) => None,
-            Error::Io(ref e) => Some(e),
-            Error::Other(_) => None
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from (error: io::Error) -> Self {
-        Error::Io(error)
-    }
-}
-
-impl From<http::Error> for Error {
-    fn from (error: http::Error) -> Self {
-        Error::Http(error)
+error_chain! {
+    foreign_links {
+        Io(::std::io::Error);
     }
 }
 
@@ -98,14 +57,18 @@ impl<'a> ToRequestBody for HashMap<&'a str, &'a str>
 }
 
 /// Performs an HTTP request with a [`Request<Option<T>>`](struct.Request.html) object.
-pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<String>, Error>
+pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<String>>
     where T: ToRequestBody
 {
-    let stream = each_addr (
-        (request.uri().host().unwrap(), request.uri().port().unwrap_or (80)),
-        |addr| TcpStream::connect_timeout (&addr, FIVE_SECONDS)
-    )?;
-    stream.set_read_timeout (Some (FIVE_SECONDS))?;
+    let stream = {
+        let raw_addr = (request.uri().host().unwrap(), request.uri().port().unwrap_or (80));
+        each_addr (
+            raw_addr,
+            |addr| TcpStream::connect_timeout (&addr, FIVE_SECONDS)
+        ).chain_err (|| format!("failed to connect to host {}:{}", raw_addr.0, raw_addr.1))?
+    };
+    stream.set_read_timeout (Some (FIVE_SECONDS))
+        .chain_err (|| "failed to set read timeout to five seconds")?;
     let reader = io::BufReader::new (&stream);
     let mut writer = io::BufWriter::new (&stream);
 
@@ -116,7 +79,8 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
         write!(writer, "{method} {path} {protocol}\r\n",
             method = request.method(),
             path = path,
-            protocol = "HTTP/1.1")?;
+            protocol = "HTTP/1.1"
+        )?;
     }
 
     // fixup headers
@@ -130,7 +94,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
             "{}{}",
             request.uri().host().unwrap(),
             host_header_port
-        ).as_str()).map_err (|e| http::Error::from(e))?;
+        ).as_str()).chain_err (|| "failed to create HTTP host header")?;
         request.headers_mut().insert (header::HOST, host_header);
     }
     let is_post = http::Method::POST == *request.method();
@@ -154,7 +118,8 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
 
     // write headers
     for (key, value) in request.headers().iter() {
-        let value = value.to_str().map_err (|e| Error::Other (e.to_string()))?;
+        let value = value.to_str()
+            .chain_err (|| format!("failed to retrieve header's '{}' value", key.as_str()))?;
         trace!("request header: {} => {}", key.as_str(), value);
         write!(writer, "{}: {}\r\n", key.as_str(), value)?;
     }
@@ -194,7 +159,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
                 let status_code = line
                     .split_whitespace()
                     .nth (1)
-                    .ok_or (Error::Protocol ("invalid status code"))?;
+                    .chain_err (|| format!("invalid status code: {}", line))?;
                 trace!("received status code: {}", status_code);
                 response_builder.status (status_code);
             },
@@ -204,8 +169,8 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
             _ if expecting_headers => {
                 let mut iterator = line.splitn (2, ":");
                 let (header_name, header_value) = (
-                    iterator.next().ok_or (Error::Protocol ("expecting header name"))?.trim(),
-                    iterator.next().ok_or (Error::Protocol ("expecting header value"))?.trim()
+                    iterator.next().chain_err (|| format!("expected header: {}", line))?.trim(),
+                    iterator.next().chain_err (|| format!("expected header: {}", line))?.trim()
                 );
                 trace!("response header: {} => {}", header_name, header_value);
                 response_builder.header (
@@ -218,12 +183,13 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
             }
         }
     }
-    Ok(response_builder.body (body)?)
+    response_builder.body (body).chain_err (|| "failed to build HTTP response object")
 }
 
 /// Performs a `GET` request to a given URI.
-pub fn get (uri: &str) -> Result<Response<String>, Error> {
-    let req: Request<Option<String>> = Request::builder().uri (uri).body (None)?;
+pub fn get (uri: &str) -> Result<Response<String>> {
+    let req: Request<Option<String>> = Request::builder().uri (uri).body (None)
+        .chain_err (|| "failed to build HTTP request object")?;
     make_request (req)
 }
 
@@ -272,8 +238,8 @@ impl<'a> PostRequestBuilder<'a> {
     }
 
     /// Consumes this builder and executes the built request.
-    pub fn build_and_execute (&mut self) -> Result<Response<String>, Error> {
-        let request = self.build()?;
+    pub fn build_and_execute (&mut self) -> Result<Response<String>> {
+        let request = self.build().chain_err (|| "failed to build HTTP request object")?;
         make_request (request)
     }
 }

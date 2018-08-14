@@ -14,6 +14,7 @@ syslog = { version = "4.0", optional = true }
 chrono = "0.4"
 log = "0.4"
 fern = "0.5"
+error-chain = "0.12"
 
 # Use a patched version of Syslog 4.0 which:
 # - does not print "ok" when initialized (issue #39, PR #38)
@@ -31,10 +32,10 @@ default = ["client", "server"]
 syslog-backend = ["syslog", "fern/syslog-4"]
 # Client features
 client = []
-client-toasts = ["winrt"]
+client-toasts = ["client", "winrt"]
 # Server features
 server = []
 # Internal features
 http-client = ["http"]
 # Renewers
-renewer-dlink = ["http-client", "hmac", "sha2"]
+renewer-dlink = ["server", "http-client", "hmac", "sha2"]

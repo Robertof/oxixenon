@@ -3,11 +3,26 @@ extern crate clap;
 
 use protocol;
 use clap::ArgMatches;
-use std::{fmt, error, io};
+use std::fmt;
 use std::fs::File;
 use std::ops::FnOnce;
 use std::io::prelude::*;
 
+// config::Error type
+error_chain! {
+    errors {
+        MissingOption (name: &'static str) {
+            description("missing configuration option")
+            display("missing configuration option: {}", name)
+        }
+        InvalidOption (name: &'static str) {
+            description("invalid configuration option")
+            display("invalid configuration option: {}", name)
+        }
+    }
+}
+
+// Configuration models
 #[derive(Debug)]
 pub enum ClientAction {
     RenewIP,
@@ -84,107 +99,58 @@ pub struct Config {
     pub logging: LogConfig
 }
 
-/* <config::Error> */
-#[derive(Debug)]
-pub enum Error {
-    Io(io::Error),
-    ParsingFailed(toml::de::Error),
-    InvalidOption(&'static str),
-    InvalidOptionWithReason(&'static str, &'static str)
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Io(ref err) => write!(f, "I/O error: {}", err),
-            Error::ParsingFailed(ref err) => write!(f, "Parsing failed: {}", err),
-            Error::InvalidOption(ref str) => write!(f, "Invalid/missing option `{}`", str),
-            Error::InvalidOptionWithReason(ref str, ref reason) =>
-                write!(f, "Invalid option `{}` - {}", str, reason)
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::ParsingFailed(ref err) => Some(err),
-            Error::Io(ref err) => Some(err),
-            _ => None
-        }
-    }
-}
-
-impl From<toml::de::Error> for Error {
-    fn from(error: toml::de::Error) -> Self {
-        Error::ParsingFailed(error)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Error::Io(error)
-    }
-}
-
-impl From<Error> for io::Error {
-    fn from(error: Error) -> Self {
-        io::Error::new (io::ErrorKind::Other, error)
-    }    
-}
-/* </config::Error> */
-
+// Extension to toml::Value
 pub trait ValueExt {
-    fn get_as<'a, T, F>(&'a self, key: &'static str, f: F) -> Option<T>
+    fn get_as<'a, T, F>(&'a self, key: &'static str, f: F) -> Result<T>
         where F: FnOnce(&'a Self) -> Option<T>;
-    fn get_as_or_invalid_key<'a, T, F>(&'a self, key: &'static str, f: F) -> Result<T, Error>
-        where F: FnOnce(&'a toml::Value) -> Option<T>;
     fn get_as_str (&self, key: &'static str) -> Option<&str>;
-    fn get_as_str_or_invalid_key (&self, key: &'static str) -> Result<&str, Error>;
-    fn get_as_table_or_invalid_key (&self, key: &'static str) -> Result<&toml::Value, Error>;
+    fn get_as_str_or_invalid_key (&self, key: &'static str) -> Result<&str>;
+    fn get_as_table_or_invalid_key (&self, key: &'static str) -> Result<&toml::Value>;
 }
 
 impl ValueExt for toml::Value {
-    fn get_as<'a, T, F>(&'a self, key: &'static str, f: F) -> Option<T>
+    fn get_as<'a, T, F>(&'a self, key: &'static str, f: F) -> Result<T>
         where F: FnOnce(&'a Self) -> Option<T>
     {
-        self.get (key.split ('.').collect::<Vec<&str>>().pop().unwrap())
-            .and_then (f)
-    }
-
-    fn get_as_or_invalid_key<'a, T, F>(&'a self, key: &'static str, f: F) -> Result<T, Error>
-        where F: FnOnce(&'a Self) -> Option<T>
-    {
-        self.get_as (key, f)
-            .ok_or (Error::InvalidOption (key.into()))
+        f(
+            self.get (key.split ('.').collect::<Vec<&str>>().pop().unwrap())
+                .chain_err (|| ErrorKind::MissingOption(key))?
+        ).chain_err (|| ErrorKind::InvalidOption(key))
     }
 
     fn get_as_str (&self, key: &'static str) -> Option<&str> {
-        Self::get_as (self, key, toml::Value::as_str)
+        Self::get_as (self, key, toml::Value::as_str).ok()
     }
 
-    fn get_as_str_or_invalid_key (&self, key: &'static str) -> Result<&str, Error> {
-        Self::get_as_or_invalid_key (self, key, toml::Value::as_str)
+    fn get_as_str_or_invalid_key (&self, key: &'static str) -> Result<&str> {
+        Self::get_as (self, key, toml::Value::as_str)
     }
-    fn get_as_table_or_invalid_key (&self, key: &'static str) -> Result<&toml::Value, Error> {
-        Self::get_as_or_invalid_key (self, key, |v|
+    fn get_as_table_or_invalid_key (&self, key: &'static str) -> Result<&toml::Value> {
+        Self::get_as (self, key, |v|
              if v.is_table() { Some(v) } else { None })
     }
 }
 
 impl Config {
-    pub fn parse_config(config_path: &str, args: &ArgMatches) -> Result<Config, Error> {
+    pub fn parse_config(config_path: &str, args: &ArgMatches) -> Result<Config> {
         macro_rules! arg_or_cfg_option {
             (from [$args:expr] get $arg:expr, from [$config:expr] get $option:expr) => {
                 $args.and_then (|a| a.value_of ($arg))
                      .or_else (|| $config.get_as_str ($option))
-                     .ok_or (Error::InvalidOption ($option))
+                     .chain_err (|| format!(
+                        "can't retrieve option '{}' from either command line arguments or config",
+                        $option
+                     ))
             }
         }
         // slurp the config file and parse it
         let mut config_str = String::new();
-        File::open (config_path)?.read_to_string (&mut config_str)?;
-        let config = config_str.parse::<toml::Value>()?;
+        File::open (config_path)
+            .chain_err (|| format!("can't open configuration file '{}'", config_path))?
+            .read_to_string (&mut config_str)
+            .chain_err (|| format!("can't read configuration file '{}'", config_path))?;
+        let config = config_str.parse::<toml::Value>()
+            .chain_err (|| format!("can't parse configuration file '{}'", config_path))?;
 
         // parse logging options
         let logging = {
@@ -203,20 +169,18 @@ impl Config {
             };
             // Parse backends and their configuration.
             let backends = logging_table
-                .get_as_or_invalid_key ("logging.backends", toml::Value::as_array)?
+                .get_as ("logging.backends", toml::Value::as_array)?
                 .iter()
                 .map (|backend_name| {
                     backend_name
                         .as_str()
-                        .ok_or (Error::InvalidOptionWithReason (
-                            "logging.backends", "must be all strings"
-                        ))
+                        .chain_err (|| "each backend name in 'logging.backends' must be a string")
                         .map (|backend_name| LogBackendConfig {
                             name: backend_name.to_string(),
                             config: logging_table.get (backend_name).map (|v| v.clone())
                         })
                 })
-                .collect::<Result<Vec<LogBackendConfig>, Error>>()?;
+                .collect::<Result<Vec<LogBackendConfig>>>()?;
             LogConfig {
                 level: verbosity.to_string(),
                 backends
@@ -242,7 +206,8 @@ impl Config {
             // get run mode
             let mode_str = if subcommand_name.is_empty() { None } else { Some(subcommand_name) }
                 .or_else (|| config.get_as_str("mode"))
-                .ok_or (Error::InvalidOption ("mode"))?;
+                .chain_err (||
+                    "can't retrieve option 'mode' from either either arguments or config")?;
 
             match mode_str {
                 "server" => {
@@ -274,8 +239,8 @@ impl Config {
                         .or_else (|| // otherwise get client_table.action.name
                             client_table.get ("action")
                                         .and_then (|a| a.get_as_str ("name")))
-                        // or croak
-                        .ok_or (Error::InvalidOption ("client.action.name"))?;
+                        .chain_err (|| "can't retrieve option 'client.action.name' from \
+                                        either arguments or config")?;
                     let action = match action_name {
                         "renew" => ClientAction::RenewIP,
                         "notifications" => ClientAction::SubscribeToNotifications,
@@ -290,10 +255,9 @@ impl Config {
                                         "unavailable" => protocol::RenewAvailability::Unavailable (
                                             args
                                                 .value_of ("reason")
-                                                .ok_or (Error::InvalidOptionWithReason (
-                                                    "client.action.set_availability.reason",
-                                                    "missing unavailability reason, see help"
-                                                ))?
+                                                .chain_err (|| "the availability reason \
+                                                                'client.action.set_availability \
+                                                                .reason' is mandatory")?
                                                 .into()
                                         ),
                                         _ => unreachable!()
@@ -309,13 +273,14 @@ impl Config {
                                         Some(false) => protocol::RenewAvailability::Unavailable (
                                             table.get_as_str_or_invalid_key ("reason")?.into()
                                         ),
-                                        None => return Err (Error::InvalidOption (
-                                            "client.action.set_availability.available"))
+                                        None => bail!(
+                                            "availability ('config.action.set_availability \
+                                            .available') is required and must be a boolean")
                                     }
                                 )
                             }
                         },
-                        _ => return Err (Error::InvalidOption ("client.action.name"))
+                        _ => bail!("unknown client action 'client.action.name': {}", action_name)
                     };
                     Mode::Client (ClientConfig {
                         connect_to: arg_or_cfg_option!(
@@ -325,7 +290,7 @@ impl Config {
                         action
                     })
                 }
-                _ => return Err(Error::InvalidOption("mode"))
+                _ => bail!("unknown run mode: {}", mode_str)
             }
         };
 

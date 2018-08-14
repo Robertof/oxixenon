@@ -1,5 +1,7 @@
 # oxixenon (aka Xenon)
 
+![project icon](oxixenon.png)
+
 ## Introduction
 
 Xenon is a software that can be used to obtain fresh IP addresses on demand on ISPs that give out
@@ -97,22 +99,36 @@ Xenon allows to temporarily disable the renewing functionality, and to specify a
 unavailability. This is useful if, for example, you're performing some critical activity on your
 network and you want to ensure that no downtime occurs.
 
-## Dependencies
+```
+cargo run -- client set_availability unavailable "Doing an important online form"
+# later..
+cargo run -- client set_availability available
+```
+
+## Features and dependencies
 
 As I expected to run Xenon on my router, I decided to include as little dependencies as possible,
 and I even went as far as implementing [my own (basic) HTTP client](src/http_client.rs) using the
-objects specified in the crate `http`. The final list of dependencies is the following:
+objects specified in the crate `http`. Here are the available features along with their
+dependencies:
 
-| Name | Client? | Server? | Optional? | Purpose |
-| ---- | ------- | ------- | --------- | ------- |
-| byteorder | yes | yes | no | To properly send network-endian integers and so on |
-| toml | yes | yes | no | To parse the configuration |
-| http | no | yes | no | Basic HTTP objects used by `http_client` |
-| sha2, hmac | no | yes | no | Required by the `dlink` renewer to hash passwords |
-| clap | yes | yes | no | Used to parse command line arguments |
-| winrt | yes | no | yes | To display notification toasts on Windows, enabled with feature `client-toasts` |
-| fern, log | yes | yes | no | Logging support |
-| syslog | yes | yes | yes | Syslog support, enabled with feature `syslog-backend` |
+| Name | Default? | Required feature(s) | Dependencies | Purpose |
+| ---- | -------- | ------------------- | ------------ | ------- |
+| client | yes | none | none | Client functionality |
+| server | yes | none | none | Server functionality |
+| client-toasts | no | client | winrt | Enables [notification toasts](#notification-toasts) |
+| renewer-dlink | no | server, http-client | hmac, sha2 | Renewer for D-Link/ADB routers |
+| syslog-backend | no | none | syslog | Enables syslog support for the logging system |
+
+The list of non-optional dependencies is the following:
+
+| Name | Purpose |
+| ---- | ------- |
+| byteorder | To properly send network-endian integers and so on |
+| toml | To parse the configuration |
+| clap | Used to parse command line arguments |
+| fern, log | Logging system |
+| error-chain | Error management & propagation |
 
 ## Protocol
 
@@ -156,8 +172,8 @@ See also [protocol.rs](src/protocol.rs).
 ## TODOs
 
 - [ ] Improve documentation
-- [ ] Move `renewers` and `notifiers` specific implementations to their own directories
-- [ ] Improve errors - right now only plain `enum`s are used, which are pretty restrictive and
+- [x] Move `renewers` and `notifiers` specific implementations to their own directories
+- [x] Improve errors - right now only plain `enum`s are used, which are pretty restrictive and
       sometimes redundant
 
 ## History

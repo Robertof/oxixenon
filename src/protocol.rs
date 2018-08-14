@@ -1,7 +1,11 @@
+//use errors::*;
 use byteorder::{ReadBytesExt, WriteBytesExt, NetworkEndian};
 use std::fmt;
 use std::error;
-use std::io::{Error as IoError, ErrorKind, Result, Read, Write};
+use std::io::{Read, Write};
+
+// Creates Error, ErrorKind & Result. They are linked to the main error type errors::Error.
+error_chain! {}
 
 trait WriteString {
     fn write_u16_string (&mut self, str: Option<&str>) -> Result<()>;
@@ -14,12 +18,13 @@ trait ReadString {
 impl<'a> WriteString for Write + 'a {
     fn write_u16_string(&mut self, str: Option<&str>) -> Result<()> {
         let len = str.as_ref().map (|s| s.len()).unwrap_or (0);
-        if len > <u16>::max_value().into() {
-            return Err (IoError::from (ErrorKind::InvalidInput));
-        }
-        self.write_u16::<NetworkEndian>(len as u16)?;
+        ensure!(
+            len <= <u16>::max_value().into(),
+            "invalid string length given to write_u16_string: {}", len
+        );
+        self.write_u16::<NetworkEndian>(len as u16).chain_err (|| "can't write string length")?;
         if let Some(msg) = str {
-            write!(self, "{}", msg)?;
+            write!(self, "{}", msg).chain_err (|| "can't write string contents")?;
         }
         Ok(())
     }
@@ -27,10 +32,12 @@ impl<'a> WriteString for Write + 'a {
 
 impl<'a> ReadString for Read + 'a {
     fn read_u16_string (&mut self) -> Result<Option<String>> {
-        let msg_length = self.read_u16::<NetworkEndian>()?;
+        let msg_length = self.read_u16::<NetworkEndian>()
+            .chain_err (|| "failed to read expected u16 string length")?;
         trace!("read_u16_string: received msg_length: {}", msg_length);
         let mut msg_buffer: Vec<u8> = Vec::with_capacity (msg_length.into());
-        let _ = self.take (msg_length.into()).read_to_end (&mut msg_buffer);
+        self.take (msg_length.into()).read_to_end (&mut msg_buffer)
+            .chain_err (|| format!("failed to read string content of {} bytes", msg_length))?;
         trace!("read_u16_string: read buffer: {:?}", msg_buffer);
         Ok(if msg_buffer.len() > 0 { String::from_utf8(msg_buffer).ok() } else { None })
     }
@@ -85,27 +92,27 @@ impl RenewAvailability {
     }
 
     fn read (reader: &mut Read) -> Result<Self> {
-        let variant = reader.read_u8()?;
+        let variant = reader.read_u8().chain_err (|| "failed to read RenewAvailability variant")?;
         match variant {
             0 /* available */   => Ok(RenewAvailability::Available),
             1 /* unavailable */ => {
-                let reason = reader.read_u16_string()?.ok_or (
-                    IoError::new (ErrorKind::InvalidData,
-                        "error while parsing RenewAvailability: invalid unavailability string")
-                )?;
+                let reason = reader.read_u16_string()
+                    .chain_err (|| "failed to read RenewAvailability reason string")?  // Result<T>
+                    .chain_err (|| "RenewAvailability reason string can't be empty")?; // Option<T>
                 Ok(RenewAvailability::Unavailable(reason))
             },
-            _ => Err (IoError::new (ErrorKind::InvalidData,
-                "error while parsing RenewAvailability: unknown variant"))
+            _ => bail!("unknown RenewAvailability variant: {}", variant)
         }
     }
 
     fn write (&self, writer: &mut Write) -> Result<()> {
-        writer.write_u8 (self.repr())?;
+        writer.write_u8 (self.repr())
+            .chain_err (|| "failed to write RenewAvailability variant")?;
         match *self {
             RenewAvailability::Available => (),
             RenewAvailability::Unavailable(ref reason) => {
-                writer.write_u16_string (Some (reason))?;
+                writer.write_u16_string (Some (reason))
+                    .chain_err (|| "failed to write RenewAvailability reason")?;
             }
         };
         Ok(())
@@ -123,8 +130,10 @@ pub enum Packet {
     Event(Event)
 }
 
-impl From<Box<error::Error>> for Packet {
-    fn from(error: Box<error::Error>) -> Self {
+use std::ops::Deref;
+
+impl<T: Deref<Target = error::Error>> From<T> for Packet {
+    fn from(error: T) -> Self {
         Packet::Error(error.to_string())
     }
 }
@@ -148,29 +157,36 @@ impl Packet {
     }
 
     pub fn read(reader: &mut Read) -> Result<Self> {
-        let packet_no = reader.read_u8()?;
+        let packet_no = reader.read_u8().chain_err (|| "failed to read packet number")?;
         trace!("Packet::read: received packet number: {}", packet_no);
 
         let packet = match packet_no {
             PACKET_FRESH_IP_REQUEST => Packet::FreshIPRequest,
             PACKET_OK => Packet::Ok,
             PACKET_SET_RENEW_AVAIL => {
-                Packet::SetRenewingAvailable(RenewAvailability::read (reader)?)
+                Packet::SetRenewingAvailable(
+                    RenewAvailability::read (reader)
+                        .chain_err (|| "failed to read Packet::RenewAvailability")?
+                )
             },
             PACKET_ERROR => Packet::Error(
-                reader.read_u16_string()?.unwrap_or ("Unknown error".into())
+                reader
+                    .read_u16_string()
+                    .chain_err (|| "failed to read Packet::Error reason")?
+                    .unwrap_or ("Unknown error".into())
             ),
             PACKET_EVENT => {
                 // read the event number
-                let event_no = reader.read_u8()?;
+                let event_no = reader.read_u8()
+                    .chain_err (|| "failed to read Packet::Event event number")?;
                 // try to convert it back to an event
                 let event = match event_no {
                     event_no if event_no == Event::IPRenewed as u8 => Event::IPRenewed,
-                    _ => return Err (IoError::new (ErrorKind::InvalidData, "unknown event number"))
+                    _ => bail!("unknown event number: {}", event_no)
                 };
                 Packet::Event(event)
             },
-            _ => return Err (IoError::new (ErrorKind::InvalidData, "unknown packet number"))
+            _ => bail!("unknown packet number: {}", packet_no)
         };
 
         trace!("Packet::read: finished parsing packet: {:#?}", packet);
@@ -178,15 +194,18 @@ impl Packet {
     }
 
     pub fn write(&self, writer: &mut Write) -> Result<()> {
-        writer.write_u8 (self.packet_no())?;
+        writer.write_u8 (self.packet_no()).chain_err (|| "failed to write packet number")?;
         match *self {
             Packet::FreshIPRequest | Packet::Ok => (),
-            Packet::SetRenewingAvailable (ref availability) => availability.write (writer)?,
+            Packet::SetRenewingAvailable (ref availability) =>
+                availability.write (writer).chain_err (|| "failed to write RenewAvailability")?,
             Packet::Error (ref msg) => {
-                writer.write_u16_string (Some(msg))?
+                writer.write_u16_string (Some(msg))
+                    .chain_err (|| format!("failed to write error message '{}'", msg))?
             },
             Packet::Event (ref evt) => {
-                writer.write_u8 (*evt as u8)?;
+                writer.write_u8 (*evt as u8)
+                    .chain_err (|| format!("failed to write event number '{}'", evt))?;
             }
         }
         Ok(())

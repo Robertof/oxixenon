@@ -3,12 +3,13 @@ extern crate oxixenon;
 extern crate clap;
 #[macro_use]
 extern crate log;
+extern crate error_chain;
 
-use std::{process, error};
-use std::io::{BufWriter, BufReader};
+use std::process;
+use error_chain::ChainedError;
 use oxixenon::*;
+use oxixenon::errors::*;
 use oxixenon::notifier::Notifier;
-use oxixenon::protocol::Packet;
 
 #[cfg(all(feature = "client", feature = "client-toasts"))]
 use oxixenon::notification_toasts::*;
@@ -53,21 +54,23 @@ fn main() {
     let config_file = args.value_of ("config").unwrap_or ("config.toml");
     let config = match config::Config::parse_config(config_file, &args) {
         Err(error) => {
-            eprintln!("ERROR: Can't parse config file \"{}\" or command line arguments\n{}",
-                config_file, error);
+            eprintln!("Can't parse config file \"{}\" or command line arguments",
+                config_file);
+            eprintln!("{}", error.display_chain());
             process::exit(1)
         },
         Ok(result) => result
     };
     // Setup logging.
     if let Err(error) = logging::init (&config.logging) {
-        eprintln!("ERROR: Can't setup logging: {}", error);
+        eprintln!("Can't setup logging: {}", error.display_chain());
         process::exit(1)
     }
     // Get and initialize the chosen notifier.
     let notifier = match notifier::get_notifier (&config.notifier) {
         Err(error) => {
-            error!("Can't instantiate the requested notifier: {}", error);
+            error!("can't instantiate the requested notifier '{}'", config.notifier.name);
+            log_error_with_chain!(error, "{}", error);
             process::exit(1)
         },
         Ok(result) => result
@@ -78,17 +81,18 @@ fn main() {
         config::Mode::Client(ref config) => start_client (config, notifier)
     };
     if let Err(error) = result {
-        error!("{}", error);
+        log_error_with_chain!(error, "{}", error);
         process::exit(2);
     }
 }
 
 // Server
 #[cfg(feature = "server")]
-fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
+fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> Result<()> {
+    use std::io::{BufWriter, BufReader};
     use std::time;
     use std::net::TcpListener;
-    use oxixenon::protocol::{Event, RenewAvailability};
+    use oxixenon::protocol::{Packet, Event, RenewAvailability};
     // Local macro to make returning errors easy.
     macro_rules! error_packet {
         ($writer: ident, $($message: tt),+) => {{
@@ -96,7 +100,7 @@ fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> 
             warn!(target: "server", "client produced error: {}", msg);
             Packet::Error (msg)
                 .write (&mut $writer)
-                .map_err (|x| Box::new(x) as Box<error::Error>)
+                .map_err (|e| e.into())
         }}
     }
     // Fetch an instance of the IP renewer
@@ -105,49 +109,70 @@ fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> 
     // Store the current availability status.
     let mut availability = RenewAvailability::Available;
     info!(target: "server", "binding to {}", config.bind_to);
-    let listener = TcpListener::bind (config.bind_to.as_str())?;
+    let listener = TcpListener::bind (config.bind_to.as_str())
+        .chain_err (|| format!("failed to bind to {}", config.bind_to))?;
     for stream in listener.incoming() {
-        let mut stream = stream?;
-        let peer_addr = stream.peer_addr()?;
+        let mut stream = stream.chain_err (|| "failed to retrieve I/O stream")?;
+        let peer_addr = stream.peer_addr().chain_err (|| "failed to retrieve peer address")?;
         let mut writer = BufWriter::new (&stream);
         let mut reader = BufReader::new (&stream);
         debug!(target: "server", "new client connected: {}", peer_addr);
         
         // poor man's try-catch block
-        let result = (|| -> Result<(), Box<error::Error>> {
-            stream.set_read_timeout (Some (time::Duration::from_secs (5)))?;
-            let packet = Packet::read (&mut reader)?;
+        let result = (|| -> Result<()> {
+            stream.set_read_timeout (Some (time::Duration::from_secs (5)))
+                .chain_err (|| "failed to set stream read timeout to 5 seconds")?;
+            let packet = Packet::read (&mut reader)
+                .chain_err (|| "invalid packet")?;
             match packet {
                 Packet::FreshIPRequest => {
                     info!(target: "server", "client {} requested a new IP address", peer_addr);
                     if let RenewAvailability::Unavailable(reason) = &availability {
                         return error_packet!(writer, "Renewal unavailable: {}", reason);
                     }
-                    renewer.renew_ip()?;
-                    notifier.notify (Event::IPRenewed)?;
+                    // Make sure that the outermost error is something safe to send to the client.
+                    renewer.renew_ip()
+                        .chain_err (|| "failed to renew the IP address")?;
+                    notifier.notify (Event::IPRenewed)
+                        .chain_err (|| "failed to notify the requested event")?;
                 },
                 Packet::SetRenewingAvailable (new_availability) => {
                     info!(target: "server", "client {} set availability to {}",
                         peer_addr, new_availability);
                     availability = new_availability;
                 },
-                _ => return error_packet!(writer, "Unknown packet")
+                _ => return error_packet!(writer, "Unsupported packet")
             };
             Packet::Ok.write (&mut writer)?;
             Ok(())
         })();
 
         if let Err(err) = result {
-            warn!(target: "server", "client produced error: {}", err);
+            log_error_with_chain!(
+                target: "server",
+                log::Level::Warn,
+                err, "client {} produced external error: {}", peer_addr, err
+            );
+
+            // Retrieve a safe message to send to the client as an error message.
+            let message = match err {
+                // Protocol and chained errors can be safely sent (without the underlying cause)
+                Error(ErrorKind::Protocol(err), _) => err.to_string(),
+                Error(ErrorKind::Msg(err), _)      => err,
+                Error(ErrorKind::Notifier(_), _)   => "failed to send notifications".into(),
+                Error(ErrorKind::Renewer(_), _)    => "failed to renew the IP address".into(),
+                _                                  => "unexpected error".into()
+            };
+
             // ignore errors while writing errors
-            let _ = Packet::from(err).write (&mut writer);
+            let _ = Packet::Error(message).write (&mut writer);
         }
     }
     Ok(())
 }
 
 #[cfg(not(feature = "server"))]
-fn start_server (_config: &config::ServerConfig, _notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
+fn start_server (_config: &config::ServerConfig, _notifier: Box<Notifier>) -> Result<()> {
     error!("server functionality is disabled");
     process::exit(255)
 }
@@ -161,9 +186,11 @@ fn try_send_toast (toasts: &NotificationToasts, message: &str) {
 }
 
 #[cfg(feature = "client")]
-fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
+fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> Result<()> {
     use std::io::prelude::*;
+    use std::io::{BufReader, BufWriter};
     use std::net::TcpStream;
+    use oxixenon::protocol::Packet;
     info!(target: "client", "running action '{}'", config.action);
     let packet = match config.action {
         config::ClientAction::RenewIP => Some (Packet::FreshIPRequest),
@@ -185,11 +212,13 @@ fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> 
 
     if let Some(packet) = packet {
         info!(target: "client", "connecting to {}...", config.connect_to);
-        let stream = TcpStream::connect (config.connect_to.as_str())?;
+        let stream = TcpStream::connect (config.connect_to.as_str())
+            .chain_err (|| format!("failed to connect to {}", config.connect_to))?;
         let mut reader = BufReader::new (&stream);
         let mut writer = BufWriter::new (&stream);
         packet.write (&mut writer)?;
-        writer.flush()?;
+        writer.flush()
+            .chain_err (|| "failed to flush the I/O stream")?;
 
         let response = Packet::read (&mut reader)?;
 
@@ -204,7 +233,7 @@ fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> 
 }
 
 #[cfg(not(feature = "client"))]
-fn start_client (_config: &config::ClientConfig, _notifier: Box<Notifier>) -> Result<(), Box<error::Error>> {
+fn start_client (_config: &config::ClientConfig, _notifier: Box<Notifier>) -> Result<()> {
     error!("client functionality is disabled");
     process::exit(255)
 }
