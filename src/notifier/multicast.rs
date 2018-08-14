@@ -1,75 +1,15 @@
+use super::{Notifier as NotifierTrait, Error};
 use config;
 use config::ValueExt;
 use protocol::{Packet, Event};
-use std::{io, fmt, error};
 use std::net::{UdpSocket, IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 
-/* <notifier::Error> */
-#[derive(Debug)]
-pub enum Error {
-    Generic(&'static str),
-    GenericWithCause(&'static str, Box<error::Error>),
-    Config(config::Error),
-    Io(io::Error),
-    Other(Box<error::Error>)
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Generic(ref e)                   => write!(f, "Notifier: Error: {}", e),
-            Error::Config (ref e)                   => write!(f, "Notifier: Config error: {}", e),
-            Error::Io     (ref e)                   => write!(f, "Notifier: I/O error: {}", e),
-            Error::Other  (ref e)                   => write!(f, "Notifier: Error: {}", e),
-            Error::GenericWithCause(ref msg, ref e) => write!(f, "Notifier: Error: {}: {}", msg, e)
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Generic(_) => None,
-            Error::Config(ref e) => Some(e),
-            Error::Io(ref e) => Some(e),
-            Error::Other(ref e) => Some(e.as_ref()),
-            Error::GenericWithCause(_, ref e) => Some(e.as_ref())
-        }
-    }
-}
-
-impl From<config::Error> for Error {
-    fn from(error: config::Error) -> Self {
-        Error::Config(error)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Error::Io(error)
-    }
-}
-
-impl From<Box<error::Error>> for Error {
-    fn from(error: Box<error::Error>) -> Self {
-        Error::Other(error)
-    }
-}
-/* </notifier::Error> */
-
-pub trait Notifier {
-    fn from_config (notifier: &config::NotifierConfig) -> Result<Self, Error>
-        where Self: Sized;
-    fn notify (&mut self, event: Event) -> Result<(), Error>;
-    fn listen(&mut self, on_event: &Fn(Event, Option<SocketAddr>) -> ()) -> Result<(), Error>;
-}
-
-struct MulticastNotifier {
+pub struct Notifier {
     bind_addr: SocketAddr,
     addr: SocketAddr
 }
 
-impl Notifier for MulticastNotifier {
+impl NotifierTrait for Notifier {
     fn from_config (notifier: &config::NotifierConfig) -> Result<Self, Error>
         where Self: Sized
     {
@@ -99,7 +39,7 @@ impl Notifier for MulticastNotifier {
             ))?;
         trace!(target: "notifier::multicast", "initialized, addr = {}, bind_addr = {}",
             addr, bind_addr);
-        Ok(MulticastNotifier {
+        Ok(Self {
             addr,
             bind_addr
         })
@@ -140,34 +80,4 @@ impl Notifier for MulticastNotifier {
         }
         
     }   
-}
-
-struct NoopNotifier;
-impl Notifier for NoopNotifier {
-    fn from_config (_notifier: &config::NotifierConfig) -> Result<Self, Error>
-        where Self: Sized
-    {
-        Ok(NoopNotifier)
-    }
-
-    fn notify (&mut self, _event: Event) -> Result<(), Error> { Ok(()) }
-
-    fn listen(&mut self, _on_event: &Fn(Event, Option<SocketAddr>) -> ()) -> Result<(), Error> {
-        Err(Error::Generic(
-            "Can't listen for notifications with this notifier. Try using a real one"
-        ))
-    }
-}
-
-pub fn get_notifier (notifier: &config::NotifierConfig) -> Result<Box<Notifier>, Error> {
-    macro_rules! notifier_from_config {
-        ($name: ident) => {
-            $name::from_config (notifier).map (|v| Box::new(v) as Box<Notifier>)
-        }
-    }
-    match notifier.name.as_str() {
-        "multicast"     => notifier_from_config!(MulticastNotifier),
-        "none" | "noop" => notifier_from_config!(NoopNotifier),
-        _ => Err(Error::Generic ("invalid notifier name - must be one of 'multicast', 'none'"))
-    }
 }
