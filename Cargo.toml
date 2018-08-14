@@ -27,7 +27,14 @@ winrt = { version = "0.5", features = ["windows-data", "windows-ui"], optional =
 
 [features]
 default = ["client", "server"]
+# Logging backends
+syslog-backend = ["syslog", "fern/syslog-4"]
+# Client features
 client = []
 client-toasts = ["winrt"]
-server = ["http", "hmac", "sha2"]
-syslog-backend = ["syslog", "fern/syslog-4"]
+# Server features
+server = []
+# Internal features
+http-client = ["http"]
+# Renewers
+renewer-dlink = ["http-client", "hmac", "sha2"]

@@ -1,11 +1,7 @@
 extern crate byteorder;
 extern crate toml;
-#[cfg(feature = "server")]
+#[cfg(feature = "http-client")]
 extern crate http;
-#[cfg(feature = "server")]
-extern crate hmac;
-#[cfg(feature = "server")]
-extern crate sha2;
 extern crate clap;
 #[cfg(all(windows, feature = "client-toasts"))]
 extern crate winrt;
@@ -21,7 +17,7 @@ pub mod logging;
 pub mod protocol;
 #[cfg(feature = "server")]
 pub mod renewer;
-#[cfg(feature = "server")]
+#[cfg(feature = "http-client")]
 pub mod http_client;
 pub mod notifier;
 

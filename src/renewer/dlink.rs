@@ -1,66 +1,16 @@
 extern crate hmac;
 extern crate sha2;
 
-use ::config;
-use ::http_client;
+use super::{Error, Renewer as RenewerTrait};
+use config;
 use config::ValueExt;
-use std::fmt;
-use std::marker::Sized;
-use std::error::Error as StdError;
-use sha2::Sha256;
-use hmac::{Hmac, Mac};
+use http_client;
+use self::hmac::{Hmac, Mac};
+use self::sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
-/* <renewer::Error> */
-#[derive(Debug)]
-pub enum Error {
-    Generic(&'static str),
-    Http(http_client::Error),
-    Config(config::Error)
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Http(ref s) => write!(f, "Renewer: HTTP error: {}", s),
-            Error::Generic(ref s) => write!(f, "Renewer: Error: {}", s),
-            Error::Config(ref s) => write!(f, "Renewer: Config error: {}", s)
-        }
-    }
-}
-
-impl StdError for Error {
-    fn cause(&self) -> Option<&StdError> {
-        match *self {
-            Error::Http(ref e) => Some(e),
-            Error::Generic(_) => None,
-            Error::Config(ref e) => Some(e)
-        }
-    }
-}
-
-impl From<config::Error> for Error {
-    fn from(error: config::Error) -> Self {
-        Error::Config(error)
-    }
-}
-
-impl From<http_client::Error> for Error {
-    fn from(error: http_client::Error) -> Self {
-        Error::Http(error)
-    }
-}
-/* </renewer::Error> */
-
-pub trait Renewer {
-    fn from_config(renewer: &config::RenewerConfig) -> Result<Self, Error>
-        where Self: Sized;
-    fn init(&mut self) -> Result<(), Error> { Ok(()) }
-    fn renew_ip(&mut self) -> Result<(), Error>;
-}
-
-struct DlinkRenewer {
+pub struct Renewer {
     ip: String,
     username: String,
     password: String,
@@ -69,7 +19,7 @@ struct DlinkRenewer {
     try_count: u8
 }
 
-impl DlinkRenewer {
+impl Renewer {
     fn login (&mut self) -> Result<(), Error> {
         info!(target: "renewer::dlink", "trying to login using specified credentials");
         let login_url = format!("http://{}/ui/login", self.ip);
@@ -135,7 +85,7 @@ impl DlinkRenewer {
     }
 }
 
-impl Renewer for DlinkRenewer {
+impl RenewerTrait for Renewer {
     fn from_config(renewer: &config::RenewerConfig) -> Result<Self, Error>
         where Self: Sized {
         let config = renewer.config.as_ref().ok_or (
@@ -155,7 +105,7 @@ impl Renewer for DlinkRenewer {
             ).into());
         }
 
-        Ok(DlinkRenewer {
+        Ok(Self {
             ip:       config.get_as_str_or_invalid_key ("server.renewer.dlink.ip")?.into(),
             username: config.get_as_str_or_invalid_key ("server.renewer.dlink.username")?.into(),
             password: config.get_as_str_or_invalid_key ("server.renewer.dlink.password")?.into(),
@@ -215,30 +165,5 @@ impl Renewer for DlinkRenewer {
             }
         }
         Ok(())
-    }
-}
-
-struct DummyRenewer;
-impl Renewer for DummyRenewer {
-    fn from_config (_renewer: &config::RenewerConfig) -> Result<Self, Error>
-        where Self: Sized
-    {
-        Ok(DummyRenewer)
-    }
-    fn renew_ip (&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
-pub fn get_renewer (renewer: &config::RenewerConfig) -> Result<Box<Renewer>, Error> {
-    macro_rules! renewer_from_config {
-        ($name: ident) => {
-            $name::from_config (renewer).map (|v| Box::new(v) as Box<Renewer>)
-        }
-    }
-    match renewer.name.as_str() {
-        "dlink" => renewer_from_config!(DlinkRenewer),
-        "dummy" => renewer_from_config!(DummyRenewer),
-        _ => Err(Error::Generic("invalid renewer name -- must be one of 'dlink', 'dummy'"))
     }
 }
