@@ -1,3 +1,9 @@
+# v1.1
+
+- NEW: added support for FritzBox! routers with the new "fritzbox-local" renewer.
+       NOTE: this renewer only works when Xenon is directly running on the FritzBox! router, as it
+       makes use of internal commands to restart the connection and obtain a new IP.
+
 # v1.0
 
 First stable release! Hooray!
