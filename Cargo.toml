@@ -39,3 +39,4 @@ server = []
 http-client = ["http"]
 # Renewers
 renewer-dlink = ["server", "http-client", "hmac", "sha2"]
+renewer-fritzbox-local = ["server"]
