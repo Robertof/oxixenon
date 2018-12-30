@@ -1,6 +1,6 @@
 [package]
 name = "oxixenon"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Roberto Frenna <robertof.public@gmail.com>"]
 
 [dependencies]
@@ -19,7 +19,7 @@ error-chain = "0.12"
 # Use a patched version of Syslog 4.0 which:
 # - does not print "ok" when initialized (issue #39, PR #38)
 # - uses native Rust Unix sockets (PR #36)
-# - compiles on non-Unix platform (commit bffd3a3 on my repo)
+# - compiles on non-Unix platforms (commit bffd3a3 on my repo)
 [patch.crates-io]
 syslog = { git = "https://github.com/Robertof/rust-syslog" }
 
