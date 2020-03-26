@@ -1,4 +1,4 @@
-use config;
+use crate::config;
 use std::marker::Sized;
 
 error_chain! {

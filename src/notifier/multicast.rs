@@ -1,7 +1,7 @@
 use super::{Notifier as NotifierTrait, Result, ResultExt};
-use config;
-use config::ValueExt;
-use protocol::{Packet, Event};
+use crate::config;
+use crate::config::ValueExt;
+use crate::protocol::{Packet, Event};
 use std::net::{UdpSocket, IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 
 pub struct Notifier {

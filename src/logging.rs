@@ -4,10 +4,10 @@ extern crate log;
 #[cfg(feature = "syslog-backend")]
 extern crate syslog;
 
-use errors::*;
+use crate::errors::*;
 use std::{io, fmt};
 use log::LevelFilter;
-use config::{ValueExt, LogConfig};
+use crate::config::{ValueExt, LogConfig};
 
 #[macro_export]
 macro_rules! log_error_with_chain {

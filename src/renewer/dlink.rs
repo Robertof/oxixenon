@@ -2,9 +2,9 @@ extern crate hmac;
 extern crate sha2;
 
 use super::{Renewer as RenewerTrait, Result, ResultExt};
-use config;
-use config::ValueExt;
-use http_client;
+use crate::config;
+use crate::config::ValueExt;
+use crate::http_client;
 use self::hmac::{Hmac, Mac};
 use self::sha2::Sha256;
 

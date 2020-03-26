@@ -1,5 +1,5 @@
 use super::{Renewer as RenewerTrait, Result};
-use config;
+use crate::config;
 
 pub struct Renewer;
 impl RenewerTrait for Renewer {

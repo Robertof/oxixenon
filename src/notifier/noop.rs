@@ -1,6 +1,6 @@
 use super::{Notifier as NotifierTrait, Result};
-use config;
-use protocol::Event;
+use crate::config;
+use crate::protocol::Event;
 use std::net::SocketAddr;
 
 pub struct Notifier;

@@ -2,6 +2,7 @@
 name = "oxixenon"
 version = "1.1.0"
 authors = ["Roberto Frenna <robertof.public@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 byteorder = "1"

@@ -1,7 +1,7 @@
 extern crate toml;
 extern crate clap;
 
-use protocol;
+use crate::protocol;
 use clap::ArgMatches;
 use std::fmt;
 use std::fs::File;

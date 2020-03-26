@@ -1,5 +1,5 @@
 use super::{Renewer as RenewerTrait, Result, ResultExt};
-use config;
+use crate::config;
 use std::process::{Command, Stdio};
 
 pub struct Renewer;

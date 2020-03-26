@@ -1,5 +1,5 @@
-use config;
-use protocol::Event;
+use crate::config;
+use crate::protocol::Event;
 use std::net::SocketAddr;
 
 error_chain! {
