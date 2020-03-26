@@ -19,10 +19,10 @@ pub trait Renewer {
     fn renew_ip(&mut self) -> Result<()>;
 }
 
-pub fn get_renewer (renewer: &config::RenewerConfig) -> Result<Box<Renewer>> {
+pub fn get_renewer (renewer: &config::RenewerConfig) -> Result<Box<dyn Renewer>> {
     macro_rules! renewer_from_config {
         ($name: path) => {
-            <$name>::from_config (renewer).map (|v| Box::new(v) as Box<Renewer>)
+            <$name>::from_config (renewer).map (|v| Box::new(v) as Box<dyn Renewer>)
         }
     }
     match renewer.name.as_str() {

@@ -5,23 +5,16 @@ authors = ["Roberto Frenna <robertof.public@gmail.com>"]
 
 [dependencies]
 byteorder = "1"
-toml = "0.4"
-http = { version = "0.1", optional = true }
+toml = "0.5"
+http = { version = "0.2", optional = true }
 hmac = { version = "*", optional = true }
 sha2 = { version = "*", optional = true }
 clap = { version = "*", default-features = false }
-syslog = { version = "4.0", optional = true }
+syslog = { version = "5.0", optional = true }
 chrono = "0.4"
 log = "0.4"
-fern = "0.5"
+fern = "0.6"
 error-chain = "0.12"
-
-# Use a patched version of Syslog 4.0 which:
-# - does not print "ok" when initialized (issue #39, PR #38)
-# - uses native Rust Unix sockets (PR #36)
-# - compiles on non-Unix platforms (commit bffd3a3 on my repo)
-[patch.crates-io]
-syslog = { git = "https://github.com/Robertof/rust-syslog" }
 
 [target.'cfg(windows)'.dependencies]
 winrt = { version = "0.5", features = ["windows-data", "windows-ui"], optional = true }

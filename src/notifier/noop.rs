@@ -13,7 +13,7 @@ impl NotifierTrait for Notifier {
 
     fn notify (&mut self, _event: Event) -> Result<()> { Ok(()) }
 
-    fn listen(&mut self, _on_event: &Fn(Event, Option<SocketAddr>) -> ()) -> Result<()> {
+    fn listen(&mut self, _on_event: &dyn Fn(Event, Option<SocketAddr>) -> ()) -> Result<()> {
         bail!("Can't listen for notifications with this notifier. Try using a real one")
     }
 }

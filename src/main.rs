@@ -88,7 +88,7 @@ fn main() {
 
 // Server
 #[cfg(feature = "server")]
-fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> Result<()> {
+fn start_server (config: &config::ServerConfig, mut notifier: Box<dyn Notifier>) -> Result<()> {
     use std::io::{BufWriter, BufReader};
     use std::time;
     use std::net::TcpListener;
@@ -112,7 +112,7 @@ fn start_server (config: &config::ServerConfig, mut notifier: Box<Notifier>) -> 
     let listener = TcpListener::bind (config.bind_to.as_str())
         .chain_err (|| format!("failed to bind to {}", config.bind_to))?;
     for stream in listener.incoming() {
-        let mut stream = stream.chain_err (|| "failed to retrieve I/O stream")?;
+        let stream = stream.chain_err (|| "failed to retrieve I/O stream")?;
         let peer_addr = stream.peer_addr().chain_err (|| "failed to retrieve peer address")?;
         let mut writer = BufWriter::new (&stream);
         let mut reader = BufReader::new (&stream);
@@ -186,7 +186,7 @@ fn try_send_toast (toasts: &NotificationToasts, message: &str) {
 }
 
 #[cfg(feature = "client")]
-fn start_client (config: &config::ClientConfig, mut notifier: Box<Notifier>) -> Result<()> {
+fn start_client (config: &config::ClientConfig, mut notifier: Box<dyn Notifier>) -> Result<()> {
     use std::io::prelude::*;
     use std::io::{BufReader, BufWriter};
     use std::net::TcpStream;

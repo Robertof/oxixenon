@@ -61,7 +61,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
     where T: ToRequestBody
 {
     let stream = {
-        let raw_addr = (request.uri().host().unwrap(), request.uri().port().unwrap_or (80));
+        let raw_addr = (request.uri().host().unwrap(), request.uri().port_u16().unwrap_or (80));
         each_addr (
             raw_addr,
             |addr| TcpStream::connect_timeout (&addr, FIVE_SECONDS)
@@ -87,7 +87,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
     if !request.headers().contains_key (header::HOST) {
         let host_header_port = request
             .uri()
-            .port()
+            .port_u16()
             .map (|p| format!(":{}", p))
             .unwrap_or ("".into());
         let host_header = HeaderValue::from_str (format!(
@@ -161,7 +161,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
                     .nth (1)
                     .chain_err (|| format!("invalid status code: {}", line))?;
                 trace!("received status code: {}", status_code);
-                response_builder.status (status_code);
+                response_builder = response_builder.status (status_code);
             },
             _ if line.is_empty() && expecting_headers => {
                 expecting_headers = false
@@ -173,7 +173,7 @@ pub fn make_request<T>(mut request: Request<Option<T>>) -> Result<Response<Strin
                     iterator.next().chain_err (|| format!("expected header: {}", line))?.trim()
                 );
                 trace!("response header: {} => {}", header_name, header_value);
-                response_builder.header (
+                response_builder = response_builder.header (
                     header_name,
                     header_value
                 );
@@ -195,7 +195,7 @@ pub fn get (uri: &str) -> Result<Response<String>> {
 
 /// Starts building a `POST` request to a given URI.
 pub fn build_post<'a>(uri: &'a str) -> PostRequestBuilder<'a> {
-    apply_to (PostRequestBuilder::new(), |b| b.uri(uri))
+    PostRequestBuilder::new().uri(uri)
 }
 
 /// A builder for HTTP `POST` requests.
@@ -208,7 +208,7 @@ impl<'a> PostRequestBuilder<'a> {
     /// Creates a new builder.
     pub fn new() -> PostRequestBuilder<'a> {
         PostRequestBuilder {
-            builder: apply_to (Request::builder(), |b| b.method (http::Method::POST)),
+            builder: Request::builder().method (http::Method::POST),
             data: Some(HashMap::new())
         }
     }
@@ -219,36 +219,29 @@ impl<'a> PostRequestBuilder<'a> {
     }
 
     /// Sets the URI of this request builder.
-    pub fn uri (&mut self, uri: &'a str) -> &mut Self {
-        self.builder.uri (uri);
+    pub fn uri (mut self, uri: &'a str) -> Self {
+        self.builder = self.builder.uri (uri);
         self
     }
 
     /// Adds an element to the `application/x-www-form-urlencoded` fields of this builder.
-    pub fn put (&mut self, key: &'a str, value: &'a str) -> &mut Self {
+    pub fn put (mut self, key: &'a str, value: &'a str) -> Self {
         self.data.as_mut().expect ("PostRequestBuilder already used").insert (key, value);
         self
     }
 
     /// Consumes this builder and produces a `Request<T>` with a type suitable for use in
     /// `make_request`.
-    pub fn build (&mut self) -> http::Result<Request<Option<HashMap<&'a str, &'a str>>>> {
+    pub fn build (mut self) -> http::Result<Request<Option<HashMap<&'a str, &'a str>>>> {
         let map = self.data.take().expect ("PostRequestBuilder already used");
         self.builder.body (if map.is_empty() { None } else { Some (map) })
     }
 
     /// Consumes this builder and executes the built request.
-    pub fn build_and_execute (&mut self) -> Result<Response<String>> {
+    pub fn build_and_execute (self) -> Result<Response<String>> {
         let request = self.build().chain_err (|| "failed to build HTTP request object")?;
         make_request (request)
     }
-}
-
-fn apply_to<T, F>(mut val: T, f: F) -> T
-    where F: FnOnce(&mut T) -> &T
-{
-    f(&mut val);
-    val
 }
 
 // taken from std/net/mod.rs

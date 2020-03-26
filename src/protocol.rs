@@ -15,7 +15,7 @@ trait ReadString {
     fn read_u16_string (&mut self) -> Result<Option<String>>;
 }
 
-impl<'a> WriteString for Write + 'a {
+impl<'a> WriteString for dyn Write + 'a {
     fn write_u16_string(&mut self, str: Option<&str>) -> Result<()> {
         let len = str.as_ref().map (|s| s.len()).unwrap_or (0);
         ensure!(
@@ -30,7 +30,7 @@ impl<'a> WriteString for Write + 'a {
     }
 }
 
-impl<'a> ReadString for Read + 'a {
+impl<'a> ReadString for dyn Read + 'a {
     fn read_u16_string (&mut self) -> Result<Option<String>> {
         let msg_length = self.read_u16::<NetworkEndian>()
             .chain_err (|| "failed to read expected u16 string length")?;
@@ -91,7 +91,7 @@ impl RenewAvailability {
         }
     }
 
-    fn read (reader: &mut Read) -> Result<Self> {
+    fn read (reader: &mut dyn Read) -> Result<Self> {
         let variant = reader.read_u8().chain_err (|| "failed to read RenewAvailability variant")?;
         match variant {
             0 /* available */   => Ok(RenewAvailability::Available),
@@ -105,7 +105,7 @@ impl RenewAvailability {
         }
     }
 
-    fn write (&self, writer: &mut Write) -> Result<()> {
+    fn write (&self, writer: &mut dyn Write) -> Result<()> {
         writer.write_u8 (self.repr())
             .chain_err (|| "failed to write RenewAvailability variant")?;
         match *self {
@@ -132,7 +132,7 @@ pub enum Packet {
 
 use std::ops::Deref;
 
-impl<T: Deref<Target = error::Error>> From<T> for Packet {
+impl<T: Deref<Target = dyn error::Error>> From<T> for Packet {
     fn from(error: T) -> Self {
         Packet::Error(error.to_string())
     }
@@ -156,7 +156,7 @@ impl Packet {
         }
     }
 
-    pub fn read(reader: &mut Read) -> Result<Self> {
+    pub fn read(reader: &mut dyn Read) -> Result<Self> {
         let packet_no = reader.read_u8().chain_err (|| "failed to read packet number")?;
         trace!("Packet::read: received packet number: {}", packet_no);
 
@@ -193,7 +193,7 @@ impl Packet {
         Ok(packet)
     }
 
-    pub fn write(&self, writer: &mut Write) -> Result<()> {
+    pub fn write(&self, writer: &mut dyn Write) -> Result<()> {
         writer.write_u8 (self.packet_no()).chain_err (|| "failed to write packet number")?;
         match *self {
             Packet::FreshIPRequest | Packet::Ok => (),

@@ -52,7 +52,7 @@ impl NotifierTrait for Notifier {
         Ok(())
     }
 
-    fn listen(&mut self, on_event: &Fn(Event, Option<SocketAddr>) -> ()) -> Result<()>
+    fn listen(&mut self, on_event: &dyn Fn(Event, Option<SocketAddr>) -> ()) -> Result<()>
     {
         let any = Ipv4Addr::new (0, 0, 0, 0);
         let socket = UdpSocket::bind (self.bind_addr)

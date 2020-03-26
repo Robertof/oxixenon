@@ -15,13 +15,13 @@ pub trait Notifier {
     fn from_config (notifier: &config::NotifierConfig) -> Result<Self>
         where Self: Sized;
     fn notify (&mut self, event: Event) -> Result<()>;
-    fn listen(&mut self, on_event: &Fn(Event, Option<SocketAddr>) -> ()) -> Result<()>;
+    fn listen(&mut self, on_event: &dyn Fn(Event, Option<SocketAddr>) -> ()) -> Result<()>;
 }
 
-pub fn get_notifier (notifier: &config::NotifierConfig) -> Result<Box<Notifier>> {
+pub fn get_notifier (notifier: &config::NotifierConfig) -> Result<Box<dyn Notifier>> {
     macro_rules! notifier_from_config {
         ($name: path) => {
-            <$name>::from_config (notifier).map (|v| Box::new(v) as Box<Notifier>)
+            <$name>::from_config (notifier).map (|v| Box::new(v) as Box<dyn Notifier>)
         }
     }
     match notifier.name.as_str() {

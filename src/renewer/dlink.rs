@@ -146,7 +146,7 @@ impl RenewerTrait for Renewer {
                     self.sid_cookie.as_ref().expect ("sid must be present after login")
                 }
             };
-            request.uri (renewal_url.as_str()).header ("Cookie", sid_cookie.as_str());
+            request = request.uri (renewal_url.as_str()).header ("Cookie", sid_cookie.as_str());
         }
         
         let request = http_client::make_request (request.body(None::<String>).unwrap())
