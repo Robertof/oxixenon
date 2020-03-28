@@ -19,7 +19,8 @@ The supported renewers by Xenon are the following:
 | Name | Supported routers | Feature name | Notes |
 | ---- | ----------------- | ------------ | ----- |
 | dlink | D-Link DVA-5592, routers based on YAPS by ADB | renewer-dlink | Requires configuration, please see `config.example.toml`. |
-| fritzbox-local | AVM FritzBox! routers | renewer-fritzbox-local | This must be executed on FritzOS! to work as it makes use of internal commands to renew the IP address. No configuration required. |
+| fritzbox-local | AVM FRITZ!Box routers | renewer-fritzbox-local | This must be executed on FritzOS! to work as it makes use of internal commands to renew the IP address. No configuration required. |
+| fritzbox | AVM FRITZ!Box routers | renewer-fritzbox | Works on any FRITZ!Box router/modem. Requires configuration, please see `config.example.toml`. |
 
 Check out [extending Xenon](EXTENDING_XENON.md) if you're interested in extending Xenon and adding
 other renewers.
@@ -122,7 +123,8 @@ dependencies:
 | server | yes | none | none | Server functionality |
 | client-toasts | no | client | winrt | Enables [notification toasts](#notification-toasts) |
 | renewer-dlink | no | server, http-client | hmac, sha2 | Renewer for D-Link/ADB routers |
-| renewer-fritzbox-local | no | server | none | Renewer for FritzBox! routers (local) |
+| renewer-fritzbox-local | no | server | none | Renewer for FRITZ!Box routers (local) |
+| renewer-fritzbox | no | server, http-client | md5 | Renewer for FRITZ!Box routers |
 | syslog-backend | no | none | syslog | Enables syslog support for the logging system |
 
 The list of non-optional dependencies is the following:

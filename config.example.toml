@@ -71,7 +71,11 @@ bind_to = "127.0.0.1:5454"
 #   For D-Link home routers (tested with a DVA-5592). Requires configuration.
 # - fritzbox-local
 #   For AVM FritzBox! routers. For this to work, Xenon must be executed on the router itself as
-#   a daemon as this renewer makes use of internal AVM commands.
+#   a daemon as this renewer makes use of internal AVM commands. Requires no configuration.
+# - fritzbox
+#   For AVM FritzBox! routers. When you don't have the possibility to host Xenon on the router
+#   itself, this renewer allows to remotely connect to the router's interface and issue the
+#   renewing command. Requires configuration.
 # - dummy
 #   A dummy renewer which does nothing and requires no configuration.
 renewer_name = "dlink"
@@ -88,6 +92,17 @@ password = "admin"
 # The network interface whose address will be renewed. You can obtain this value by navigating
 # to the interface with your browser and putting here everything after "/netif/".
 interface = "pppif?if=1"
+
+# Configuration of the `fritzbox` renewer
+# Note that this is NOT `fritzbox-local` -- use `fritzbox-local` when you're hosting oxixenon
+# directly on your FritzBox. It needs no configuration.
+[server.renewer.fritzbox]
+# IP address (or hostname) of the router.
+ip = "fritz.box"
+
+# Username and password used to login. In the default configuration, username is not required.
+#username = "something"
+password = "some_password"
 
 # Client mode configuration
 [client]

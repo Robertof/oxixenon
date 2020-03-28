@@ -10,6 +10,7 @@ error_chain! {
 // Available renewers. They also need to be specified in `get_renewer()`.
 #[cfg(feature = "renewer-dlink")] mod dlink;
 #[cfg(feature = "renewer-fritzbox-local")] mod fritzbox_local;
+#[cfg(feature = "renewer-fritzbox")] mod fritzbox;
 mod dummy;
 
 pub trait Renewer {
@@ -28,6 +29,7 @@ pub fn get_renewer (renewer: &config::RenewerConfig) -> Result<Box<dyn Renewer>>
     match renewer.name.as_str() {
         #[cfg(feature = "renewer-dlink")] "dlink" => renewer_from_config!(dlink::Renewer),
         #[cfg(feature = "renewer-fritzbox-local")] "fritzbox-local" => renewer_from_config!(fritzbox_local::Renewer),
+        #[cfg(feature = "renewer-fritzbox")] "fritzbox" => renewer_from_config!(fritzbox::Renewer),
         "dummy" => renewer_from_config!(dummy::Renewer),
         _ => bail!(
             "invalid renewer name '{}' - if applicable, ensure this renewer is enabled",
