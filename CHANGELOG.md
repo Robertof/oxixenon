@@ -1,7 +1,12 @@
+# v1.2
+
+- NEW: added support for any FRITZ!Box routers with the new "fritzbox" renewer.
+       This renewer works everywhere as it connects to a FRITZ!Box using its web interface.
+
 # v1.1
 
-- NEW: added support for FritzBox! routers with the new "fritzbox-local" renewer.
-       NOTE: this renewer only works when Xenon is directly running on the FritzBox! router, as it
+- NEW: added support for FRITZ!Box routers with the new "fritzbox-local" renewer.
+       NOTE: this renewer only works when Xenon is directly running on the FRITZ!Box router, as it
        makes use of internal commands to restart the connection and obtain a new IP.
 
 # v1.0
