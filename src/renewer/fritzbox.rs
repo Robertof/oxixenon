@@ -99,7 +99,7 @@ impl Renewer {
         match Self::extract_xml_tag(document, "SID") {
             Some(sid) if sid.contains(|c| c != '0') => {
                 self.sid = Some(sid.into());
-                info!(target: "renewer::fritzbox", "login OK - found valid SID: {}", sid);
+                info!(target: "renewer::fritzbox", "login OK");
                 Ok(())
             },
             _ => bail!("login failed, check your credentials!")
