@@ -1,7 +1,7 @@
 extern crate chrono;
 extern crate fern;
 extern crate log;
-#[cfg(feature = "syslog-backend")]
+#[cfg(all(not(windows), feature = "syslog-backend"))]
 extern crate syslog;
 
 use crate::errors::*;
@@ -84,7 +84,7 @@ pub fn init (config: &LogConfig) -> Result<()> {
                         )
                 )
             },
-            #[cfg(feature = "syslog-backend")]
+            #[cfg(all(not(windows), feature = "syslog-backend"))]
             "syslog" => {
                 use std::process;
                 let config = backend.config.as_ref();

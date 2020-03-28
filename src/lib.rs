@@ -9,7 +9,7 @@ extern crate fern;
 #[macro_use]
 extern crate log;
 extern crate chrono;
-#[cfg(feature = "syslog-backend")]
+#[cfg(all(not(windows), feature = "syslog-backend"))]
 extern crate syslog;
 #[macro_use]
 extern crate error_chain;
