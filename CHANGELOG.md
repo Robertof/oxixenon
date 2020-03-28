@@ -1,5 +1,10 @@
 # v1.2
 
+- CHANGED: the `fritzbox` renewer no longer prints out the SID when logging in.
+- CHANGED: the `syslog-backend` feature now only works on non-Windows platforms.
+
+# v1.2
+
 - NEW: added support for any FRITZ!Box routers with the new "fritzbox" renewer.
        This renewer works everywhere as it connects to a FRITZ!Box using its web interface.
 
