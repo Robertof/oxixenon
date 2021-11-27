@@ -65,10 +65,18 @@ impl Renewer {
             format!("{}-{:x}", challenge, md5::compute(password_bytes))
         };
 
+        // Newer FritzOS versions don't support empty usernames. Try to find a valid username
+        // by finding an User tag with the 'last=1' field set.
+        let username = match self.username.as_ref() {
+            Some(username) => username,
+            // note: not the most robust way to extract a tag with an attribute... but it works.
+            None => Self::extract_xml_tag(body, r#"User last="1""#).unwrap_or("")
+        };
+
         // Login is a POST request to the same url containing the parameters:
         // ["username": "...",  "response": "{challenge}-md5({challenge-pwd})"]
         let res = http_client::build_post(&login_url)
-            .put("username", &self.username.as_ref().unwrap_or(&"".into()))
+            .put("username", &username)
             .put("response", &response)
             .build_and_execute()
             .chain_err(|| format!("HTTP request to login at '{}' failed", login_url))?;
@@ -149,7 +157,9 @@ impl RenewerTrait for Renewer {
         let res = http_client::get(&disconnect_url)
             .chain_err(|| "HTTP request to renewal URL failed")?;
 
-        if res.status().as_u16() == 403 {
+        // New versions of FritzOS do not return a 403 anymore when the SID is invalid, but just
+        // attempt to redirect to the homepage.
+        if res.status().as_u16() == 403 || res.status().as_u16() == 303 {
             // Oops! Invalid SID. Invalidate it and login again.
             self.sid = None;
             return self.renew_ip();

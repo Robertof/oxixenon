@@ -1,4 +1,8 @@
-# v1.2
+# v1.2.2
+
+- FIXED: new FritzOS versions do not return _403_ anymore when the SID expires, but redirect.
+
+# v1.2.1
 
 - CHANGED: the `fritzbox` renewer no longer prints out the SID when logging in.
 - CHANGED: the `syslog-backend` feature now only works on non-Windows platforms.

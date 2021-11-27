@@ -1,6 +1,6 @@
 [package]
 name = "oxixenon"
-version = "1.2.1"
+version = "1.2.2"
 authors = ["Roberto Frenna <robertof.public@gmail.com>"]
 edition = "2018"
 
