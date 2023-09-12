@@ -1,3 +1,7 @@
+# v1.2.3
+
+- FIXED: fix the `fritzbox` renewer to work on FRITZ!OS 7.57+.
+
 # v1.2.2
 
 - FIXED: new FritzOS versions do not return _403_ anymore when the SID expires, but redirect.

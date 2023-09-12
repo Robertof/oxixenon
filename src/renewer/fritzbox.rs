@@ -149,12 +149,14 @@ impl RenewerTrait for Renewer {
             Some(sid) => sid
         };
 
-        // Try to use a pre-existing SID first.
-        let disconnect_url = format!(
-            "http://{}/internet/inetstat_monitor.lua?sid={}&action=disconnect&xhr=1&myXhr=1",
-            self.ip, sid
-        );
-        let res = http_client::get(&disconnect_url)
+        let data_url = format!("http://{}/data.lua", self.ip);
+        let res = http_client::build_post(&data_url)
+            .put("xhr", "1")
+            .put("sid", sid)
+            .put("page", "netMoni")
+            .put("xhrId", "reconnect")
+            .put("disconnect", "true")
+            .build_and_execute()
             .chain_err(|| "HTTP request to renewal URL failed")?;
 
         // New versions of FritzOS do not return a 403 anymore when the SID is invalid, but just
@@ -172,11 +174,13 @@ impl RenewerTrait for Renewer {
 
         // Send a "connect" request too to speed things up. Ignore errors.
         {
-            let connect_url = format!(
-                "http://{}/internet/inetstat_monitor.lua?sid={}&action=connect&xhr=1&myXhr=1",
-                self.ip, sid
-            );
-            let _ = http_client::get(&connect_url);
+            let _ = http_client::build_post(&data_url)
+                .put("xhr", "1")
+                .put("sid", sid)
+                .put("page", "netMoni")
+                .put("xhrId", "reconnect")
+                .put("connect", "true")
+                .build_and_execute();
         }
 
         info!(target: "renewer::fritzbox", "successfully asked for another IP");
